@@ -1,0 +1,11 @@
+<package>
+  <description brief="motor_ctl">
+     motor_ctl
+  </description>
+  <author>GMC</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/motor_ctl</url>
+  <depend package="geometry_msgs"/>
+  <depend package="rospy"/>
+</package>
