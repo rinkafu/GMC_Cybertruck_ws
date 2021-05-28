@@ -7,13 +7,13 @@ obstacle_range: 2.5
 max_obstacle_height: 2.0
 raytrace_range: 3.0
 
-footprint: [[-0.30,-0.255], [0.30,-0.255], [0.30,0.255], [-0.30,0.255]]
+footprint: [[0.325, 0.29], [0.325, -0.29], [-0.325, 0.29], [-0.325, -0.29]]
 footprint_padding: 0
 
 inscribed_radius: 0.2
 circumscribed_radius: 0.3
 
-inflation_radius: 0.4
+inflation_radius: 0.55
 cost_scaling_factor: 10.0
 
 lethal_cost_threshold: 100
