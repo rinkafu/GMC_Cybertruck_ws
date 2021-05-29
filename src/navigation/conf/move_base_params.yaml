@@ -14,7 +14,7 @@ oscillation_distance: 0.5
 
 shutdown_costmap: false
 
-recovery_behavior_enabled: true
+recovery_behavior_enabled: false
 conservative_reset_dist: 0.1
 
 clearing_rotation_allowed: true

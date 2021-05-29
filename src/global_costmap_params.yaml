@@ -12,11 +12,11 @@ global_costmap:
     transform_tolerance: 0.5
 
     #set the update frequences (Hz)
-    update_frequency: 1.0
+    update_frequency: 10.0
 
     # set the publish frequency of the visualization information
-    publish_frequency: 1.0
-    resolution: 0.1
+    publish_frequency: 10.0
+    resolution: 0.01
     # define what coordinate frames the costmap should run in 
     global_frame: map
     

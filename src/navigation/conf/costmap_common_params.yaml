@@ -20,4 +20,4 @@ lethal_cost_threshold: 100
 
 observation_sources: laser_scan_sensor
 
-laser_scan_sensor: {sensor_frame: laser_frame, data_type: LaserScan, expected_update_rate: 1.5, observation_persistence: 0.0, topic: scan, marking: true, clearing: true}
+laser_scan_sensor: {sensor_frame: laser_frame, data_type: LaserScan, topic: scan, marking: true, clearing: true}
