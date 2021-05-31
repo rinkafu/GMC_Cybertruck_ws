@@ -16,7 +16,7 @@ global_costmap:
 
     # set the publish frequency of the visualization information
     publish_frequency: 1
-    resolution: 0.01
+    resolution: 0.1
     # define what coordinate frames the costmap should run in 
     global_frame: map
     

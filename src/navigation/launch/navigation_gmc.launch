@@ -10,7 +10,7 @@
 
 	<!--- Run move base --> 
 
-	<node pkg="move_base" type="move_base" name="move_base" respawn="true" output="screen">
+	<node pkg="move_base" type="move_base" name="move_base" respawn="false" output="screen">
 
 	<rosparam file="src/navigation/conf/costmap_common_params.yaml" command="load" ns="global_costmap" /> 
 	<rosparam file="src/navigation/conf/costmap_common_params.yaml" command="load" ns="local_costmap" />
