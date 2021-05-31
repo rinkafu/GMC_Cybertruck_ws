@@ -37,23 +37,27 @@ TebLocalPlannerROS:
   # rear_offset: 0.2 # for type "two_circles"
   # rear_radius: 0.2 # for type "two_circles"
   #vertices: [ [0.20, -0.20], [-0.20, -0.20], [-0.20, 0.20], [0.20, 0.20]] # for type "polygon"
-  vertices: [[0.33,0.29],[0.33,-0.29],[-0.33,-0.29],[-0.33,0.29]] # for type "polygon"
+  vertices: [[-0.30,-0.275], [0.30,-0.275], [0.30,0.275], [-0.30,0.275]] # for type "polygon"
 
  # GoalTolerance
     
- xy_goal_tolerance: 0.3
- yaw_goal_tolerance: 0.5
+ xy_goal_tolerance: 0.2
+ yaw_goal_tolerance: 0.2
  free_goal_vel: False
     
  # Obstacles
     
  min_obstacle_dist: 0.115 # This value must also include our robot's expansion, since footprint_model is set to "line".
  include_costmap_obstacles: True
- costmap_obstacles_behind_robot_dist: 1.0
+ costmap_obstacles_behind_robot_dist: 0.115
  obstacle_poses_affected: 30
- costmap_converter_plugin: ""
+ costmap_converter_plugin: "lines"
  costmap_converter_spin_thread: True
  costmap_converter_rate: 5
+ include_dynamic_obstacles: True
+ legacy_obstacle_association: False
+
+
 
  # Optimization
     
@@ -75,17 +79,17 @@ TebLocalPlannerROS:
 
  # Homotopy Class Planner
 
- enable_homotopy_class_planning: False
+ enable_homotopy_class_planning: True
  enable_multithreading: True
  simple_exploration: False
- max_number_classes: 2
+ max_number_classes: 4
  selection_cost_hysteresis: 1.0
  selection_obst_cost_scale: 1.0
  selection_alternative_time_cost: False
  roadmap_graph_no_samples: 15
- roadmap_graph_area_width: 5
- h_signature_prescaler: 0.5
+ roadmap_graph_area_width: 6
+ h_signature_prescaler: 1
  h_signature_threshold: 0.1
- obstacle_keypoint_offset: 0.1
+#  obstacle_keypoint_offset: 0.1
  obstacle_heading_threshold: 0.45
  visualize_hc_graph: False
