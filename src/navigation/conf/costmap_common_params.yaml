@@ -7,7 +7,7 @@ obstacle_range: 1.75
 max_obstacle_height: 2.0
 raytrace_range: 5.0
 
-footprint: [[0.325, 0.29], [0.325, -0.29], [-0.325, -0.29], [-0.325, 0.29]]
+footprint: [[-0.30,-0.275], [0.30,-0.275], [0.30,0.275], [-0.30,0.275]]
 footprint_padding: 0
 
 inscribed_radius: 0.2
