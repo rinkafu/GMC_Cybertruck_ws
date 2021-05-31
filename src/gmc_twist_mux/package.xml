@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="2">
+    <name>gmc_twist_mux</name>
+    <version>1.0.0</version>
+    <description>The gmc_twist_mux package</description>
+
+    <license>GMC license</license>
+    <author email="cybertruck@gmail.com">Liews Wuttipat</author>
+    <maintainer email="cybertruck@gmail.com">Liews Wuttipat</maintainer>
+    <buildtool_depend>catkin</buildtool_depend>
+</package>
