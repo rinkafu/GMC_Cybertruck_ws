@@ -32,7 +32,7 @@ local_costmap:
     # Setting the width, height and resolution of the costmap || (meters) (meters/cell)
     width: 5
     height: 5
-    resolution: 0.1
+    resolution: 0.08
     origin_x: -2.5
     origin_y: -2.5
 
