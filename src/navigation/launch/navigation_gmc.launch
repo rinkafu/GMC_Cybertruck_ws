@@ -5,7 +5,7 @@
 
 	<!--- Run the map server --> 
 
-	<node  pkg="map_server" type="map_server" name="map_server"  args="/home/cybertruck/Maps/Map27.yaml"/>
+	<node  pkg="map_server" type="map_server" name="map_server"  args="/home/cybertruck/Maps/Map26.yaml"/>
 	<include file="$(find amcl)/examples/amcl_diff.launch"/>
 
 	<!--- Run move base --> 
@@ -14,8 +14,8 @@
 
 	<rosparam file="src/navigation/conf/costmap_common_params.yaml" command="load" ns="global_costmap" /> 
 	<rosparam file="src/navigation/conf/costmap_common_params.yaml" command="load" ns="local_costmap" />
-	<rosparam file="src/navigation/conf/local_costmap_params.yaml" command="load" /> 
 	<rosparam file="src/navigation/conf/global_costmap_params.yaml" command="load" />
+	<rosparam file="src/navigation/conf/local_costmap_params.yaml" command="load" /> 
 	<rosparam file="src/navigation/conf/move_base_params.yaml" command="load" />
 	<rosparam file="src/navigation/conf/teb_local_planner_params.yaml" command="load" /> 
 	</node>

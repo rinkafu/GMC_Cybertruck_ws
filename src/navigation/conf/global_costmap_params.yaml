@@ -12,10 +12,10 @@ global_costmap:
     transform_tolerance: 0.5
 
     #set the update frequences (Hz)
-    update_frequency: 10.0
+    update_frequency: 5
 
     # set the publish frequency of the visualization information
-    publish_frequency: 10.0
+    publish_frequency: 1
     resolution: 0.01
     # define what coordinate frames the costmap should run in 
     global_frame: map
@@ -24,7 +24,7 @@ global_costmap:
     robot_base_frame: base_link
     
     # Whether the costmap will remain centered around the robot as the rovot moves through the world
-    rolling_windows: false
+    rolling_windows: False
 
     # Constructing the Mulit-Layered Costmap
     plugins:
@@ -37,12 +37,12 @@ global_costmap:
     static:
         map_topic: map
         # Whether or not the costmap initialize itself based on a map serverd by the map_server
-        static_map: false
+        static_map: True
 
     sensor_obstacle:
         #Observation_sources <--> define a list of sensors going to pass infomation to costmap
         observation_sources: laser_scan_sensor
-        laser_scan_sensor: {sensor_frame: laser_frame, data_type: LaserScan, topic: scan, marking: true, clearing: true}
+        laser_scan_sensor: {sensor_frame: laser , data_type: LaserScan, topic: scan, marking: True, clearing: True}
 
     inflation:
         inflation_radius: 0.2
