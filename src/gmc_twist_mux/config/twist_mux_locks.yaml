@@ -10,8 +10,8 @@
 
 locks:
 -
-  name    : keyboard 
-  topic   : keyboard_priority
+  name    : pckeyboard 
+  topic   : pckeyboard_priority
   timeout : 0.0
   priority: 100
 -
