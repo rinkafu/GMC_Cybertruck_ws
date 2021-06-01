@@ -16,13 +16,3 @@ topics:
   topic   : key_vel
   timeout : 0.5
   priority: 90
--
-  name    : joystick
-  topic   : joy_vel
-  timeout : 0.5
-  priority: 100
--
-  name    : tablet
-  topic   : tab_vel
-  timeout : 0.5
-  priority: 100
