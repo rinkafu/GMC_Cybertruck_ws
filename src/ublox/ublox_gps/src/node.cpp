@@ -32,15 +32,10 @@
 #include <string>
 #include <sstream>
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <time.h>
-
-#include <rtcm_msgs/Message.h>
-ros::Subscriber subRTCM;
-
-
 using namespace ublox_node;
+
+//! How long to wait during I/O reset [s]
+constexpr static int kResetWait = 10;
 
 //
 // ublox_node namespace
@@ -66,6 +61,8 @@ uint8_t ublox_node::modelFromString(const std::string& model) {
     return ublox_msgs::CfgNAV5::DYN_MODEL_AIRBORNE_4G;
   } else if(lower == "wristwatch") {
     return ublox_msgs::CfgNAV5::DYN_MODEL_WRIST_WATCH;
+  } else if(lower == "bike") {
+    return ublox_msgs::CfgNAV5::DYN_MODEL_BIKE;
   }
 
   throw std::runtime_error("Invalid settings: " + lower +
@@ -102,31 +99,37 @@ void UbloxNode::addFirmwareInterface() {
   } else if (protocol_version_ >= 14 && protocol_version_ <= 15) {
     components_.push_back(ComponentPtr(new UbloxFirmware7));
     ublox_version = 7;
-  } else {
+  } else if (protocol_version_ > 15 && protocol_version_ <= 23) {
     components_.push_back(ComponentPtr(new UbloxFirmware8));
     ublox_version = 8;
+  } else {
+    components_.push_back(ComponentPtr(new UbloxFirmware9));
+    ublox_version = 9;
   }
+
   ROS_INFO("U-Blox Firmware Version: %d", ublox_version);
 }
 
 
 void UbloxNode::addProductInterface(std::string product_category,
                                     std::string ref_rov) {
-  // if (product_category.compare("HPG") == 0 && ref_rov.compare("REF") == 0)
-  //   components_.push_back(ComponentPtr(new HpgRefProduct));
-  // else if (product_category.compare("HPG") == 0 && ref_rov.compare("ROV") == 0)
+  if (product_category.compare("HPG") == 0 && ref_rov.compare("REF") == 0)
+    components_.push_back(ComponentPtr(new HpgRefProduct));
+  else if (product_category.compare("HPG") == 0 && ref_rov.compare("ROV") == 0)
     components_.push_back(ComponentPtr(new HpgRovProduct));
-  // else if (product_category.compare("TIM") == 0)
-  //   components_.push_back(ComponentPtr(new TimProduct));
-  // else if (product_category.compare("ADR") == 0 ||
-  //          product_category.compare("UDR") == 0)
-  //   components_.push_back(ComponentPtr(new AdrUdrProduct));
-  // else if (product_category.compare("FTS") == 0)
-  //   components_.push_back(ComponentPtr(new FtsProduct));
-  // else if(product_category.compare("SPG") != 0)
-  //   ROS_WARN("Product category %s %s from MonVER message not recognized %s",
-  //            product_category.c_str(), ref_rov.c_str(),
-  //            "options are HPG REF, HPG ROV, TIM, ADR, UDR, FTS, SPG");
+  else if (product_category.compare("HPG") == 0)
+    components_.push_back(ComponentPtr(new HpPosRecProduct));
+  else if (product_category.compare("TIM") == 0)
+    components_.push_back(ComponentPtr(new TimProduct));
+  else if (product_category.compare("ADR") == 0 ||
+           product_category.compare("UDR") == 0)
+    components_.push_back(ComponentPtr(new AdrUdrProduct(protocol_version_)));
+  else if (product_category.compare("FTS") == 0)
+    components_.push_back(ComponentPtr(new FtsProduct));
+  else if(product_category.compare("SPG") != 0)
+    ROS_WARN("Product category %s %s from MonVER message not recognized %s",
+             product_category.c_str(), ref_rov.c_str(),
+             "options are HPG REF, HPG ROV, HPG #.#, TIM, ADR, UDR, FTS, SPG");
 }
 
 void UbloxNode::getRosParams() {
@@ -219,9 +222,11 @@ void UbloxNode::getRosParams() {
   // measurement period [ms]
   meas_rate = 1000 / rate_;
 
-  nh->param<std::string>("raw_data_stream/dir", raw_data_stream_dir_, "");
-  nh->param("raw_data_stream/publish", raw_data_stream_flag_, false);
+  // activate/deactivate any config
   nh->param("config_on_startup", config_on_startup_flag_, true);
+
+  // raw data stream logging 
+  rawDataStreamPa_.getRosParams();
 }
 
 void UbloxNode::pollMessages(const ros::TimerEvent& event) {
@@ -340,8 +345,8 @@ void UbloxNode::initializeRosDiagnostics() {
   updater->setHardwareID("ublox");
 
   // configure diagnostic updater for frequency
-  freq_diag = FixDiagnostic(std::string("fix"), kFixFreqTol,
-                            kFixFreqWindow, kTimeStampStatusMin);
+  freq_diag.reset(new FixDiagnostic(std::string("fix"), kFixFreqTol,
+                            kFixFreqWindow, kTimeStampStatusMin));
   for(int i = 0; i < components_.size(); i++)
     components_[i]->initializeRosDiagnostics();
 }
@@ -450,7 +455,7 @@ bool UbloxNode::configureUblox() {
                                   " SBAS.");
         }
       }
-      if (!gps.setPpp(enable_ppp_))
+      if (!gps.setPpp(enable_ppp_, protocol_version_))
         throw std::runtime_error(std::string("Failed to ") +
                                 ((enable_ppp_) ? "enable" : "disable")
                                 + " PPP.");
@@ -535,58 +540,11 @@ void UbloxNode::initializeIo() {
     gps.initializeSerial(device_, baudrate_, uart_in_, uart_out_);
   }
 
-  if (raw_data_stream_flag_ || (!raw_data_stream_dir_.empty())) {
+  // raw data stream logging
+  if (rawDataStreamPa_.isEnabled()) {
     gps.setRawDataCallback(
-      boost::bind(&UbloxNode::rawDataCallback,this, _1, _2));
-
-    if (raw_data_stream_flag_) {
-      ROS_INFO("Publishing raw data stream.");
-      std_msgs::String msg;
-      ublox_node::publish(msg, "raw_data_stream");
-    }
-
-    if (!raw_data_stream_dir_.empty()) {
-      struct stat stat_info;
-      if (stat(raw_data_stream_dir_.c_str(), &stat_info ) != 0) {
-        ROS_ERROR("Can't log raw data to file. "
-          "Directory \"%s\" does not exist.", raw_data_stream_dir_.c_str());
-
-      } else if ((stat_info.st_mode & S_IFDIR) != S_IFDIR) {
-        ROS_ERROR("Can't log raw data to file. "
-          "\"%s\" exists, but is not a directory.", raw_data_stream_dir_.c_str());
-
-      } else {
-        if (raw_data_stream_dir_.back() != '/') {
-          raw_data_stream_dir_ += '/';
-        }
-
-        time_t t = time(NULL);
-        struct tm time_struct = *localtime(&t);
-
-        std::stringstream filename;
-        filename.width(4); filename.fill('0');
-          filename << time_struct.tm_year + 1900;
-          filename.width(0); filename << '_';
-        filename.width(2); filename.fill('0');
-          filename << time_struct.tm_mon  + 1;
-          filename.width(0); filename << '_';
-        filename.width(2); filename.fill('0'); filename << time_struct.tm_mday;
-          filename.width(0); filename << '_';
-        filename.width(2); filename.fill('0'); filename << time_struct.tm_hour;
-        filename.width(2); filename.fill('0'); filename << time_struct.tm_min ;
-        filename.width(0); filename << ".log";
-        raw_data_stream_filename_ = raw_data_stream_dir_ + filename.str();
-
-        try {
-          raw_data_stream_file_.open(raw_data_stream_filename_);
-          ROS_INFO("Logging raw data to file \"%s\"", 
-            raw_data_stream_filename_.c_str());
-        } catch(const std::exception& e) {
-          ROS_ERROR("Can't log raw data to file. "
-            "Can't create file \"%s\".", raw_data_stream_filename_.c_str());
-        }
-      }
-    }
+      boost::bind(&RawDataStreamPa::ubloxCallback,&rawDataStreamPa_, _1, _2));
+    rawDataStreamPa_.initialize();
   }
 }
 
@@ -596,17 +554,17 @@ void UbloxNode::initialize() {
   initializeIo();
   // Must process Mon VER before setting firmware/hardware params
   processMonVer();
-  // if(protocol_version_ <= 14) {
-  //   if(nh->param("raw_data", false))
-  //     components_.push_back(ComponentPtr(new RawDataProduct));
-  // }
-  // // Must set firmware & hardware params before initializing diagnostics
-  // for (int i = 0; i < components_.size(); i++)
-  //   components_[i]->getRosParams();
+  if(protocol_version_ <= 14) {
+    if(nh->param("raw_data", false))
+      components_.push_back(ComponentPtr(new RawDataProduct));
+  }
+  // Must set firmware & hardware params before initializing diagnostics
+  for (int i = 0; i < components_.size(); i++)
+    components_[i]->getRosParams();
   // Do this last
   initializeRosDiagnostics();
 
-  //if (configureUblox()) {
+  if (configureUblox()) {
     ROS_INFO("U-Blox configured successfully.");
     // Subscribe to all U-Blox messages
     subscribe();
@@ -619,7 +577,7 @@ void UbloxNode::initialize() {
                              this);
     poller.start();
     ros::spin();
-  //}
+  }
   shutdown();
 }
 
@@ -627,26 +585,6 @@ void UbloxNode::shutdown() {
   if (gps.isInitialized()) {
     gps.close();
     ROS_INFO("Closed connection to %s.", device_.c_str());
-  }
-}
-
-void UbloxNode::rawDataCallback(const unsigned char* data,
-  const std::size_t size) {
-
-  std::string str((const char*) data, size);
-  if (raw_data_stream_flag_) {
-    std_msgs::String msg;
-    msg.data = str;
-    ublox_node::publish(msg, "raw_data_stream");
-  }
-
-  if (raw_data_stream_file_.is_open()) {
-    try {
-      raw_data_stream_file_ << str;
-      // raw_data_stream_file_.flush();
-    } catch(const std::exception& e) {
-      ROS_WARN("Error writing to file \"%s\"", raw_data_stream_filename_.c_str());
-    }
   }
 }
 
@@ -826,7 +764,7 @@ void UbloxFirmware6::callbackNavPosLlh(const ublox_msgs::NavPOSLLH& m) {
   fixPublisher.publish(fix_);
   last_nav_pos_ = m;
   //  update diagnostics
-  freq_diag.diagnostic->tick(fix_.header.stamp);
+  freq_diag->diagnostic->tick(fix_.header.stamp);
   updater->update();
 }
 
@@ -1327,18 +1265,22 @@ void RawDataProduct::subscribe() {
 
 void RawDataProduct::initializeRosDiagnostics() {
   if (enabled["rxm_raw"])
-    freq_diagnostics_.push_back(UbloxTopicDiagnostic("rxmraw", kRtcmFreqTol,
-                                               kRtcmFreqWindow));
+    freq_diagnostics_.push_back(boost::shared_ptr<UbloxTopicDiagnostic>(
+      new UbloxTopicDiagnostic("rxmraw", kRtcmFreqTol, kRtcmFreqWindow)));
   if (enabled["rxm_sfrb"])
-    freq_diagnostics_.push_back(UbloxTopicDiagnostic("rxmsfrb", kRtcmFreqTol,
-                                               kRtcmFreqWindow));
+    freq_diagnostics_.push_back(boost::shared_ptr<UbloxTopicDiagnostic>(
+      new UbloxTopicDiagnostic("rxmsfrb", kRtcmFreqTol, kRtcmFreqWindow)));
   if (enabled["rxm_eph"])
-    freq_diagnostics_.push_back(UbloxTopicDiagnostic("rxmeph", kRtcmFreqTol,
-                                               kRtcmFreqWindow));
+    freq_diagnostics_.push_back(boost::shared_ptr<UbloxTopicDiagnostic>(
+      new UbloxTopicDiagnostic("rxmeph", kRtcmFreqTol, kRtcmFreqWindow)));
   if (enabled["rxm_alm"])
-    freq_diagnostics_.push_back(UbloxTopicDiagnostic("rxmalm", kRtcmFreqTol,
-                                               kRtcmFreqWindow));
+    freq_diagnostics_.push_back(boost::shared_ptr<UbloxTopicDiagnostic>(
+      new UbloxTopicDiagnostic("rxmalm", kRtcmFreqTol, kRtcmFreqWindow)));
 }
+
+AdrUdrProduct::AdrUdrProduct(float protocol_version)
+    : protocol_version_(protocol_version)
+{}
 
 //
 // u-blox ADR devices, partially implemented
@@ -1352,7 +1294,7 @@ void AdrUdrProduct::getRosParams() {
 }
 
 bool AdrUdrProduct::configureUblox() {
-  if(!gps.setUseAdr(use_adr_))
+  if(!gps.setUseAdr(use_adr_, protocol_version_))
     throw std::runtime_error(std::string("Failed to ")
                              + (use_adr_ ? "enable" : "disable") + "use_adr");
   return true;
@@ -1411,73 +1353,39 @@ void AdrUdrProduct::callbackEsfMEAS(const ublox_msgs::EsfMEAS &m) {
     imu_.header.stamp = ros::Time::now();
     imu_.header.frame_id = frame_id;
     
-    float deg_per_sec = pow(2, -12);
-    float m_per_sec_sq = pow(2, -10);
-    float deg_c = 1e-2;
+    static const float deg_per_sec = pow(2, -12);
+    static const float m_per_sec_sq = pow(2, -10);
+    static const float deg_c = 1e-2;
      
-    std::vector<unsigned int> imu_data = m.data;
+    std::vector<uint32_t> imu_data = m.data;
     for (int i=0; i < imu_data.size(); i++){
       unsigned int data_type = imu_data[i] >> 24; //grab the last six bits of data
-      double data_sign = (imu_data[i] & (1 << 23)); //grab the sign (+/-) of the rest of the data
-      unsigned int data_value = imu_data[i] & 0x7FFFFF; //grab the rest of the data...should be 23 bits
-      
-      if (data_sign == 0) {
-        data_sign = -1;
-      } else {
-        data_sign = 1;
-      }
-           
-      //ROS_INFO("data sign (+/-): %f", data_sign); //either 1 or -1....set by bit 23 in the data bitarray
-  
+      int32_t data_value = static_cast<int32_t>(imu_data[i] << 8); //shift to extend sign from 24 to 32 bit integer
+      data_value >>= 8;
+
       imu_.orientation_covariance[0] = -1;
       imu_.linear_acceleration_covariance[0] = -1;
       imu_.angular_velocity_covariance[0] = -1;
 
       if (data_type == 14) {
-        if (data_sign == 1) {
-	  imu_.angular_velocity.x = 2048 - data_value * deg_per_sec;
-        } else {
-          imu_.angular_velocity.x = data_sign * data_value * deg_per_sec;
-        }
+          imu_.angular_velocity.x = data_value * deg_per_sec;
       } else if (data_type == 16) {
-        //ROS_INFO("data_sign: %f", data_sign);
-        //ROS_INFO("data_value: %u", data_value * m);
-        if (data_sign == 1) {
-	  imu_.linear_acceleration.x = 8191 - data_value * m_per_sec_sq;
-        } else {
-          imu_.linear_acceleration.x = data_sign * data_value * m_per_sec_sq;
-        }
+          imu_.linear_acceleration.x = data_value * m_per_sec_sq;
       } else if (data_type == 13) {
-        if (data_sign == 1) {
-	  imu_.angular_velocity.y = 2048 - data_value * deg_per_sec;
-        } else {
-          imu_.angular_velocity.y = data_sign * data_value * deg_per_sec;
-        }
+          imu_.angular_velocity.y = data_value * deg_per_sec;
       } else if (data_type == 17) {
-        if (data_sign == 1) {
-	  imu_.linear_acceleration.y = 8191 - data_value * m_per_sec_sq;
-        } else {
-          imu_.linear_acceleration.y = data_sign * data_value * m_per_sec_sq;
-        }
+          imu_.linear_acceleration.y = data_value * m_per_sec_sq;
       } else if (data_type == 5) {
-        if (data_sign == 1) {
-	  imu_.angular_velocity.z = 2048 - data_value * deg_per_sec;
-        } else {
-          imu_.angular_velocity.z = data_sign * data_value * deg_per_sec;
-        }
+          imu_.angular_velocity.z = data_value * deg_per_sec;
       } else if (data_type == 18) {
-        if (data_sign == 1) {
-	  imu_.linear_acceleration.z = 8191 - data_value * m_per_sec_sq;
-        } else {
-          imu_.linear_acceleration.z = data_sign * data_value * m_per_sec_sq;
-        }
+          imu_.linear_acceleration.z = data_value * m_per_sec_sq;
       } else if (data_type == 12) {
         //ROS_INFO("Temperature in celsius: %f", data_value * deg_c); 
       } else {
         ROS_INFO("data_type: %u", data_type);
         ROS_INFO("data_value: %u", data_value);
-      } 
-     
+      }
+
       // create time ref message and put in the data
       //t_ref_.header.seq = m.risingEdgeCount;
       //t_ref_.header.stamp = ros::Time::now();
@@ -1655,7 +1563,7 @@ void HpgRefProduct::tmode3Diagnostics(
     stat.level = diagnostic_msgs::DiagnosticStatus::WARN;
     stat.message = "Not configured";
   } else if (mode_ == DISABLED){
-    stat.level = diagnostic_msgs::DiagnosticStatus::WARN;
+    stat.level = diagnostic_msgs::DiagnosticStatus::OK;
     stat.message = "Disabled";
   } else if (mode_ == SURVEY_IN) {
     if (!last_nav_svin_.active && !last_nav_svin_.valid) {
@@ -1770,6 +1678,63 @@ void HpgRovProduct::callbackNavRelPosNed(const ublox_msgs::NavRELPOSNED &m) {
 }
 
 //
+// U-Blox High Precision Positioning Receiver
+//
+
+void HpPosRecProduct::subscribe() {
+  // Whether to publish Nav Relative Position NED
+  nh->param("publish/nav/relposned", enabled["nav_relposned"], enabled["nav"]);
+  // Subscribe to Nav Relative Position NED messages (also updates diagnostics)
+  gps.subscribe<ublox_msgs::NavRELPOSNED9>(boost::bind(
+     &HpPosRecProduct::callbackNavRelPosNed, this, _1), kSubscribeRate);
+
+  // Whether to publish the Heading info from Nav Relative Position NED
+  nh->param("publish/nav/heading", enabled["nav_heading"], enabled["nav"]);
+}
+
+void HpPosRecProduct::callbackNavRelPosNed(const ublox_msgs::NavRELPOSNED9 &m) {
+  if (enabled["nav_relposned"]) {
+    static ros::Publisher publisher =
+        nh->advertise<ublox_msgs::NavRELPOSNED9>("navrelposned", kROSQueueSize);
+    publisher.publish(m);
+  }
+
+  if (enabled["nav_heading"]) {
+    static ros::Publisher imu_pub =
+	      nh->advertise<sensor_msgs::Imu>("navheading", kROSQueueSize);
+
+    imu_.header.stamp = ros::Time::now();
+    imu_.header.frame_id = frame_id;
+
+    imu_.linear_acceleration_covariance[0] = -1;
+    imu_.angular_velocity_covariance[0] = -1;
+
+    // Transform angle since ublox is representing heading as NED but ROS uses ENU as convention (REP-103).
+    // Also convert the base-to-rover angle to a robot-to-base angle (consistent with frame_id)
+    double heading = - (static_cast<double>(m.relPosHeading) * 1e-5 / 180.0 * M_PI) - M_PI_2;
+    tf::Quaternion orientation;
+    orientation.setRPY(0, 0, heading);
+    imu_.orientation.x = orientation[0];
+    imu_.orientation.y = orientation[1];
+    imu_.orientation.z = orientation[2];
+    imu_.orientation.w = orientation[3];
+    imu_.orientation_covariance[0] = 1000.0;
+    imu_.orientation_covariance[4] = 1000.0;
+    imu_.orientation_covariance[8] = 1000.0;
+    // When heading is reported to be valid, use accuracy reported in 1e-5 deg units
+    if (m.flags & ublox_msgs::NavRELPOSNED9::FLAGS_REL_POS_HEAD_VALID)
+    {
+      imu_.orientation_covariance[8] = pow(m.accHeading * 1e-5 / 180.0 * M_PI, 2);
+    }
+
+    imu_pub.publish(imu_);
+  }
+
+  last_rel_pos_ = m;
+  updater->update();
+}
+
+//
 // U-Blox Time Sync Products, partially implemented.
 //
 void TimProduct::getRosParams() {
@@ -1844,25 +1809,10 @@ void TimProduct::initializeRosDiagnostics() {
   updater->force_update();
 }
 
-
-void rtcmCallback(const rtcm_msgs::Message::ConstPtr &msg)
-{
-  gps.sendRtcm(msg->message);
-}
-
-
 int main(int argc, char** argv) {
   ros::init(argc, argv, "ublox_gps");
   nh.reset(new ros::NodeHandle("~"));
   nh->param("debug", ublox_gps::debug, 1);
-
-  ros::NodeHandle param_nh("~");
-  std::string rtcm_topic;
-  param_nh.param("rtcm_topic", rtcm_topic, std::string("rtcm"));
-  subRTCM = nh->subscribe(rtcm_topic, 10, rtcmCallback);
-  
-
-
   if(ublox_gps::debug) {
     if (ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,
                                        ros::console::levels::Debug))
