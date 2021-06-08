@@ -3,10 +3,10 @@ base_global_planner: navfn/NavfnROS
 # Choose which Local Planner Plugin to use
 base_local_planner: teb_local_planner/TebLocalPlannerROS
 
-controller_frequency: 5
+controller_frequency: 30
 controller_patience: 30
 
-planner_frequency: 60
+planner_frequency: 30
 planner_patience: 15
 
 oscillation_timeout: 30.0

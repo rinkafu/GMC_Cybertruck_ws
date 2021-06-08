@@ -9,7 +9,7 @@ TebLocalPlannerROS:
 #  costmap_converter_plugin: "costmap_converter::CostmapToPolygonsDBSConcaveHull"
  #costmap_converter_plugin: "" # deactivate plugin
  costmap_converter_spin_thread: True
- costmap_converter_rate: 5
+ costmap_converter_rate: 10
 
  
 ## Configure plugins (namespace move_base/TebLocalPlannerROS/PLUGINNAME)
@@ -67,7 +67,7 @@ TebLocalPlannerROS:
     
  xy_goal_tolerance: 0.25
  yaw_goal_tolerance: 0.25
- free_goal_vel: True
+ free_goal_vel: False
     
  # Obstacles
     
@@ -100,10 +100,10 @@ TebLocalPlannerROS:
 
  # Homotopy Class Planner
 
- enable_homotopy_class_planning: True
+ enable_homotopy_class_planning: False
  enable_multithreading: True
  simple_exploration: False
- max_number_classes: 4
+ max_number_classes: 2
  selection_cost_hysteresis: 1.0
  selection_obst_cost_scale: 1.0
  selection_alternative_time_cost: False
