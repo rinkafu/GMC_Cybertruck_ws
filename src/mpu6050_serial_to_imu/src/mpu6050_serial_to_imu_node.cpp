@@ -26,6 +26,7 @@ int main(int argc, char** argv)
   std::string tf_parent_frame_id;
   std::string tf_frame_id;
   std::string frame_id;
+  std::string child_frame_id;
   double time_offset_in_seconds;
   bool broadcast_tf;
   double linear_acceleration_stddev;
@@ -41,10 +42,11 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "mpu6050_serial_to_imu_node");
 
   ros::NodeHandle private_node_handle("~");
-  private_node_handle.param<std::string>("port", port, "/dev/ttyUSB1");
+  private_node_handle.param<std::string>("port", port, "/dev/ttyUSB0");
   private_node_handle.param<std::string>("tf_parent_frame_id", tf_parent_frame_id, "imu_base");
   private_node_handle.param<std::string>("tf_frame_id", tf_frame_id, "imu_link");
-  private_node_handle.param<std::string>("frame_id", frame_id, "imu_link");
+  private_node_handle.param<std::string>("frame_id", frame_id, "odom");
+  private_node_handle.param<std::string>("child_frame_id", child_frame_id, "base_link");
   private_node_handle.param<double>("time_offset_in_seconds", time_offset_in_seconds, 0.0);
   private_node_handle.param<bool>("broadcast_tf", broadcast_tf, true);
   private_node_handle.param<double>("linear_acceleration_stddev", linear_acceleration_stddev, 0.0);
@@ -75,9 +77,9 @@ int main(int argc, char** argv)
   sensor_msgs::Temperature temperature_msg;
   temperature_msg.variance = 0;
 
-  static tf::TransformBroadcaster tf_br;
-  tf::Transform transform;
-  transform.setOrigin(tf::Vector3(0,0,0));
+  // static tf::TransformBroadcaster tf_br;
+  // tf::Transform transform;
+  // transform.setOrigin(tf::Vector3(0,0,0));
 
   std::string input;
   std::string read;
@@ -178,6 +180,7 @@ int main(int argc, char** argv)
                 // publish imu message
                 imu.header.stamp = measurement_time;
                 imu.header.frame_id = frame_id;
+                imu.child_frame_id = child_frame_id;
 
                 quaternionTFToMsg(differential_rotation, imu.orientation);
 
@@ -199,11 +202,12 @@ int main(int argc, char** argv)
                 imu_temperature_pub.publish(temperature_msg);
 
                 // publish tf transform
-                if (broadcast_tf)
-                {
-                  transform.setRotation(differential_rotation);
-                  tf_br.sendTransform(tf::StampedTransform(transform, measurement_time, tf_parent_frame_id, tf_frame_id));
-                }
+                // if (broadcast_tf)
+                // {
+                //   transform.setRotation(differential_rotation);
+                //   tf_br.sendTransform(tf::StampedTransform(transform, measurement_time, tf_parent_frame_id, tf_frame_id));
+                // }
+
                 input.erase(0, data_packet_start + 28); // delete everything up to and including the processed packet
               }
               else
