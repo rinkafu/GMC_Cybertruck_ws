@@ -156,12 +156,19 @@ void setup() {
     devStatus = mpu.dmpInitialize();
 
     // supply your own gyro offsets here, scaled for min sensitivity
-    mpu.setXAccelOffset(-1169);
-    mpu.setYAccelOffset(744);
-    mpu.setZAccelOffset(1620);
-    mpu.setXGyroOffset(48);
-    mpu.setYGyroOffset(47);
-    mpu.setZGyroOffset(-8);
+    // mpu.setXAccelOffset(-1169);
+    // mpu.setYAccelOffset(744);
+    // mpu.setZAccelOffset(1620);
+    // mpu.setXGyroOffset(48);
+    // mpu.setYGyroOffset(47);
+    // mpu.setZGyroOffset(-8);
+
+    mpu.setXAccelOffset(0);
+    mpu.setYAccelOffset(0);
+    mpu.setZAccelOffset(0);
+    mpu.setXGyroOffset(0);
+    mpu.setYGyroOffset(0);
+    mpu.setZGyroOffset(0);
 
     // make sure it worked (returns 0 if so)
     if (devStatus == 0) {
@@ -238,10 +245,10 @@ void loop() {
 
         // read a packet from FIFO
         mpu.getFIFOBytes(fifoBuffer, packetSize);
-
+        
         // track FIFO count here in case there is > 1 packet available
         // (this lets us immediately read more without waiting for an interrupt)
-        fifoCount -= packetSize;
+//        fifoCount -= packetSize;
 
         // display quaternion values in InvenSense Teapot demo format:
         teapotPacket[2] = fifoBuffer[0];

@@ -89,8 +89,8 @@ int main(int argc, char** argv)
   double y = 0.0;
   double th = 0.0;
 
-  double vx = 0.0;
-  double vy = 0.0;
+  double vx = 0.1;
+  double vy = -0.1;
   double vth = 0.1;
 
   while(ros::ok())
@@ -212,10 +212,15 @@ int main(int argc, char** argv)
 
                 imu_temperature_pub.publish(temperature_msg);
 
-                // publish odom
+                // // publish odom
                 double vx = xf;
-                double vy = xf;
+                double vy = yf;
                 double vth = gz;
+
+                // publish odom
+                // double vx = gxf;
+                // double vy = gyf;
+                // double vth = gz;
 
                 //compute odometry in a typical way given the velocities of the robot
                 double dt = (current_time - last_time).toSec();
@@ -262,8 +267,7 @@ int main(int argc, char** argv)
                 odom.twist.twist.angular.z = vth;
 
                 //publish the message
-                imu_odom.publish(odom);   
-
+                imu_odom.publish(odom);  
                 input.erase(0, data_packet_start + 28); // delete everything up to and including the processed packet
               }
               else
@@ -316,6 +320,7 @@ int main(int argc, char** argv)
       ser.close();
     }
     ros::spinOnce();
+    last_time = current_time; 
     r.sleep();
   }
 }
