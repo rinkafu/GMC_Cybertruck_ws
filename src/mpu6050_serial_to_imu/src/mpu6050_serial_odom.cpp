@@ -1,3 +1,5 @@
+#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Quaternion.h>
 #include <ros/ros.h>
 #include <serial/serial.h>
@@ -27,7 +29,6 @@ int main(int argc, char** argv)
   std::string tf_frame_id;
   std::string frame_id;
   double time_offset_in_seconds;
-  bool broadcast_tf;
   double linear_acceleration_stddev;
   double angular_velocity_stddev;
   double orientation_stddev;
@@ -46,13 +47,13 @@ int main(int argc, char** argv)
   private_node_handle.param<std::string>("tf_frame_id", tf_frame_id, "imu_link");
   private_node_handle.param<std::string>("frame_id", frame_id, "imu_link");
   private_node_handle.param<double>("time_offset_in_seconds", time_offset_in_seconds, 0.0);
-  private_node_handle.param<bool>("broadcast_tf", broadcast_tf, false);
   private_node_handle.param<double>("linear_acceleration_stddev", linear_acceleration_stddev, 0.0);
   private_node_handle.param<double>("angular_velocity_stddev", angular_velocity_stddev, 0.0);
   private_node_handle.param<double>("orientation_stddev", orientation_stddev, 0.0);
 
   ros::NodeHandle nh("imu");
   ros::Publisher imu_pub = nh.advertise<sensor_msgs::Imu>("data", 50);
+  ros::Publisher imu_odom = nh.advertise<nav_msgs::Odometry>("odom", 50);
   ros::Publisher imu_temperature_pub = nh.advertise<sensor_msgs::Temperature>("temperature", 50);
   ros::ServiceServer service = nh.advertiseService("set_zero_orientation", set_zero_orientation);
 
@@ -75,15 +76,26 @@ int main(int argc, char** argv)
   sensor_msgs::Temperature temperature_msg;
   temperature_msg.variance = 0;
 
-  // static tf::TransformBroadcaster tf_br;
-  // tf::Transform transform;
-  // transform.setOrigin(tf::Vector3(0,0,0));
+  static tf::TransformBroadcaster odom_broadcaster;
 
   std::string input;
   std::string read;
 
+  ros::Time current_time, last_time;
+  current_time = ros::Time::now();
+  last_time = ros::Time::now();
+
+  double x = 0.0;
+  double y = 0.0;
+  double th = 0.0;
+
+  double vx = 0.0;
+  double vy = 0.0;
+  double vth = 0.1;
+
   while(ros::ok())
   {
+    current_time = ros::Time::now();
     try
     {
       if (ser.isOpen())
@@ -110,6 +122,7 @@ int main(int argc, char** argv)
                 int16_t y = (((0xff &(char)input[data_packet_start + 6]) << 8) | 0xff &(char)input[data_packet_start + 7]);
                 int16_t z = (((0xff &(char)input[data_packet_start + 8]) << 8) | 0xff &(char)input[data_packet_start + 9]);
 
+                // accleration
                 double wf = w/16384.0;
                 double xf = x/16384.0;
                 double yf = y/16384.0;
@@ -175,6 +188,7 @@ int main(int argc, char** argv)
                 // calculate measurement time
                 ros::Time measurement_time = ros::Time::now() + ros::Duration(time_offset_in_seconds);
 
+
                 // publish imu message
                 imu.header.stamp = measurement_time;
                 imu.header.frame_id = frame_id;
@@ -198,12 +212,58 @@ int main(int argc, char** argv)
 
                 imu_temperature_pub.publish(temperature_msg);
 
-                // publish tf transform
-                // if (broadcast_tf)
-                // {
-                //   transform.setRotation(differential_rotation);
-                //   tf_br.sendTransform(tf::StampedTransform(transform, measurement_time, tf_parent_frame_id, tf_frame_id));
-                // }
+                // publish odom
+                double vx = xf;
+                double vy = xf;
+                double vth = gz;
+
+                //compute odometry in a typical way given the velocities of the robot
+                double dt = (current_time - last_time).toSec();
+                double delta_x = (vx * cos(th) - vy * sin(th)) * dt;
+                double delta_y = (vx * sin(th) + vy * cos(th)) * dt;
+                double delta_th = vth * dt;
+
+                x += delta_x;           
+                y += delta_y;           
+                th += delta_th;
+
+                //since all odometry is 6DOF we'll need a quaternion created from yaw
+                geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
+
+                //first, we'll publish the transform over tf
+                geometry_msgs::TransformStamped odom_trans;
+                odom_trans.header.stamp = current_time;
+                odom_trans.header.frame_id = "odom";
+                odom_trans.child_frame_id = "base_link";
+
+                odom_trans.transform.translation.x = x;
+                odom_trans.transform.translation.y = y;
+                odom_trans.transform.translation.z = 0.0;
+                odom_trans.transform.rotation = odom_quat;
+
+                //send the transform
+                odom_broadcaster.sendTransform(odom_trans);
+
+                //next, we'll publish the odometry message over ROS
+                nav_msgs::Odometry odom;
+                odom.header.stamp = current_time;
+                odom.header.frame_id = "odom";
+
+                //set the position
+                odom.pose.pose.position.x = x;
+                odom.pose.pose.position.y = y;
+                odom.pose.pose.position.z = 0.0;
+                odom.pose.pose.orientation = odom_quat;
+
+                //set the velocity
+                odom.child_frame_id = "base_link";
+                odom.twist.twist.linear.x = vx;
+                odom.twist.twist.linear.y = vy;
+                odom.twist.twist.angular.z = vth;
+
+                //publish the message
+                imu_odom.publish(odom);   
+
                 input.erase(0, data_packet_start + 28); // delete everything up to and including the processed packet
               }
               else
