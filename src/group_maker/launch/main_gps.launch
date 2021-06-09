@@ -2,7 +2,7 @@
 <launch>
     <node name="motor" pkg="motor_ctl" type="motor_ctl.py"  output="log" respawn="true" respawn_delay="1" />
     <include file="$(find rplidar_ros)/launch/rplidar.launch" />
-    <include file="$(find rf2o_laser_odometry)/launch/rf2o_laser_odometry.launch" />
+    <!-- <include file="$(find rf2o_laser_odometry)/launch/rf2o_laser_odometry.launch" /> -->
     <node name="gmc_tf" pkg="gmc_tf" type="gmc_tf_node"  output="log" respawn="true" respawn_delay="2" />
     <include file="$(find navigation)/launch/navigation_gmc.launch" />
     <node name="costmap" pkg="costmap_converter" type="standalone_converter"  output="log" respawn="true" respawn_delay="3"/>
