@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="imu_mpu6050" type="imu_mpu6050_node" name="imu_mpu6050_node" output="screen">
+        <param name="port" type="str" value="/dev/ttyUSB0"/>
+        <param name="buadrate" type="int" value="115200"/>
+    </node>
+</launch>
