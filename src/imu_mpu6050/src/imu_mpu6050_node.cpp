@@ -160,7 +160,7 @@ int main(int argc, char **argv)
                     }
                 }
                 input.erase(0);
-                ROS_INFO("ax :%f ay :%f az : %f wx : %f wy: %f wz: %f roll: %f picth: %f yaw: %f T: %f", _ax, _ay, _az, _wx, _wy, _wz, roll, pitch, yaw, T);
+                // ROS_INFO("ax :%f ay :%f az : %f wx : %f wy: %f wz: %f roll: %f picth: %f yaw: %f T: %f", _ax, _ay, _az, _wx, _wy, _wz, roll, pitch, yaw, T);
 
                 // calculate measurement time
                 ros::Time measurement_time = ros::Time::now() + ros::Duration(time_offset_in_seconds);
