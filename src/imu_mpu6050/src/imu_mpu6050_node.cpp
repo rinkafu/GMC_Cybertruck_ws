@@ -1,4 +1,5 @@
 #include <geometry_msgs/Quaternion.h>
+#include <stdio.h>
 #include <ros/ros.h>
 #include <serial/serial.h>
 #include <sensor_msgs/Imu.h>
@@ -65,8 +66,12 @@ int main(int argc, char **argv)
 
     std::string input;
     std::string read;
+    char check_Sum;
     int data_packet_start;
     int data_packet_identify;
+    float _ax, _ay, _az,
+        _wx, _wy, _wz,
+        roll, pitch, yaw, T;
 
     ros::Rate loop_rate(200);
     while (ros::ok())
@@ -77,56 +82,54 @@ int main(int argc, char **argv)
         {
             // std_msgs::String result;
             read = ser.read(ser.available());
-            // ROS_INFO_STREAM("read " << (int)read.size() << " new characters from serial port, adding to characters of old input." << (int)input.size());
             input += read;
-            while (input.length() >= 4095)
+            // ROS_INFO_STREAM(read);
+            // if (input.length() == 10){
+            //     ROS_INFO_STREAM(read);
+            // }else
+            if (input.length() > 10)
             {
-                data_packet_start = input.find("\x55");
-                data_packet_identify = data_packet_start + 1;
-                // ROS_INFO_STREAM(data_packet_start);
+                if (input[0] == 0x55)
+                {
+                    check_Sum = 0x55 + input[3] + input[2] + input[5] + input[4] + input[7] + input[6] + input[9] + input[8];
+                    switch (input[1])
+                    {
+                    case 0x51:
+                        if ((check_Sum + 0x51) == input[10])
+                        {
+                            _ax = ((float(short((input[3] << 8) | input[2]))) / 32768) * 16;
+                            _ay = ((float(short((input[5] << 8) | input[4]))) / 32768) * 16;
+                            _az = ((float(short((input[7] << 8) | input[6]))) / 32768) * 16;
+                            T = (short((input[9] << 8) | input[8]) / 340) + 36.53;
+                        }
+                        break;
+                    case 0x52:
+                        if ((check_Sum + 0x52) == input[10])
+                        {
+                            _wx = ((float(short((input[3] << 8) | input[2]))) / 32768) * 2000;
+                            _wy = ((float(short((input[5] << 8) | input[4]))) / 32768) * 2000;
+                            _wz = ((float(short((input[7] << 8) | input[6]))) / 32768) * 2000;
+                            T = (short((input[9] << 8) | input[8]) / 340) + 36.53;
+                        }
+                        break;
+                    case 0x53:
+                        if ((check_Sum + 0x53) == input[10])
+                        {
+                            roll = ((float(short((input[3] << 8) | input[2]))) / 32768) * 180;
+                            pitch = ((float(short((input[5] << 8) | input[4]))) / 32768) * 180;
+                            yaw = ((float(short((input[7] << 8) | input[6]))) / 32768) * 180;
+                            T = (short((input[9] << 8) | input[8]) / 340) + 36.53;
+                        }
+                        break;
+                    }
 
-                if ((char)input[data_packet_identify] == '\x51') //0x51
-                {
-                    int16_t wx = ((input[data_packet_start + 2] + (input[data_packet_start + 3] * 256)) / 32768) * 2000;
-                }
-                else if ((char)input[data_packet_identify] == '\x52') //0x52
-                {
-                    int16_t wx = (((input[data_packet_start + 2] + (input[data_packet_start + 3]) * 256)) / 32768) * 2000;
-                    ROS_INFO_STREAM(wx);
-                }
-                else if ((char)input[data_packet_identify] == '\x53') //0x53
-                {
-                    int16_t wx = ((input[data_packet_start + 2] + (input[data_packet_start + 3] * 256)) / 32768) * 2000;
-                }
-                else
-                {
-                    input.erase(0, data_packet_start + 4095); // delete everything packet input
+                    ROS_INFO_STREAM("T:" << T);
                 }
 
-                // if ((char)input[data_packet_identify] == '\x51') //0x51
-                // {
-                //     int16_t x = (((0xff & (char)input[data_packet_start + 2]) << 8) | 0xff & (char)input[data_packet_start + 3]) / 32768 * 156.96;
-                //     ROS_INFO_STREAM("aX:" << x);
-                // }
-                // else if ((char)input[data_packet_identify] == '\x52') //0x52
-                // {
-                //     int16_t x = (((0xff & (char)input[data_packet_start + 2]) << 8) | 0xff & (char)input[data_packet_start + 3]) / 32768 * ;
-                //     ROS_INFO_STREAM("wX:" << x);
-                // }
-                // else if ((char)input[data_packet_identify] == '\x53') //0x53
-                // {
-                //     int16_t x = (((0xff & (char)input[data_packet_start + 2]) << 8) | 0xff & (char)input[data_packet_start + 3]);
-                //     ROS_INFO_STREAM("X:" << x);
-                // }
-                // else
-                // {
-                //     input.erase(0, data_packet_start + 4095); // delete everything packet input
-                // }
-                // ROS_INFO_STREAM(input[data_packet_start + 1]);
-                input.erase(0, data_packet_start + 4095);
+                ROS_INFO("ax :%f ay :%f az : %f wx : %f wy: %f wz: %f roll: %f picth: %f yaw: %f T: %f", _ax, _ay, _az, _wx, _wy, _wz, roll, pitch, yaw, T);
+
+                input.erase(0);
             }
-            // ROS_INFO_STREAM("Read: " << read);
-            // imu_pub.publish(result);
         }
 
         //loop rate
